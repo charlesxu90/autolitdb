@@ -1,0 +1,46 @@
+# AutoLitDB Example Configuration
+# Copy this file to config.yaml and modify as needed
+
+# Project paths
+data_dir: ./data
+output_dir: ./output
+
+# Logging
+log_level: INFO
+log_file: null  # Set to a path to enable file logging
+
+# PubMed configuration
+pubmed:
+  base_url: https://eutils.ncbi.nlm.nih.gov/entrez/eutils
+  batch_size: 200
+  rate_limit_delay: 0.34  # ~3 requests per second without API key
+  max_retries: 3
+  api_key: $NCBI_API_KEY  # Optional: Set NCBI_API_KEY env var for higher rate limits
+
+# LLM configuration for filtering
+llm:
+  provider: vllm  # vllm, openai, anthropic
+  model_name: google/gemma-3-12b-it
+  base_urls:
+    - http://localhost:8000/v1
+    # Add more servers for load balancing:
+    # - http://localhost:8001/v1
+  temperature: 0.1
+  max_tokens: 512
+  max_concurrent_requests: 32
+  batch_size: 16
+
+# PDF downloader configuration (requires Lite_downloader server)
+downloader:
+  server_url: http://localhost:8080
+  download_supplements: true
+  timeout: 300
+  max_concurrent: 3
+
+# RAG database configuration
+rag:
+  collection_name: literature
+  persist_directory: ./data/chroma_db
+  embedding_model: sentence-transformers/all-MiniLM-L6-v2
+  chunk_size: 1000
+  chunk_overlap: 200
