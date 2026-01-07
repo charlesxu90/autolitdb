@@ -182,8 +182,9 @@ def filter(
 @main.command()
 @click.argument("input_file", type=click.Path(exists=True))
 @click.option("--supplements/--no-supplements", default=True, help="Download supplementary materials")
+@click.option("--port", type=int, help="Downloader server port (default: 8080)")
 @click.pass_context
-def download(ctx, input_file: str, supplements: bool):
+def download(ctx, input_file: str, supplements: bool, port: int | None):
     """Download PDFs for articles.
 
     INPUT_FILE is a CSV file with articles (must have DOI or URL).
@@ -194,6 +195,11 @@ def download(ctx, input_file: str, supplements: bool):
     from autolitdb.sources.base import Article
 
     config = load_config(ctx.obj["config_path"])
+
+    # Override server port if specified
+    if port is not None:
+        config.downloader.server_url = f"http://localhost:{port}"
+
     pipeline = LiteraturePipeline(config)
 
     try:
@@ -357,6 +363,7 @@ def stats(ctx):
 @click.option("--download/--no-download", default=True, help="Download PDFs")
 @click.option("--supplements/--no-supplements", default=True, help="Download supplements")
 @click.option("--output-prefix", default="results", help="Output file prefix")
+@click.option("--port", type=int, help="Downloader server port (default: 8080)")
 @click.pass_context
 def run(
     ctx,
@@ -368,6 +375,7 @@ def run(
     download: bool,
     supplements: bool,
     output_prefix: str,
+    port: int | None,
 ):
     """Run the complete pipeline.
 
@@ -379,6 +387,11 @@ def run(
             "Papers about protein engineering methods to improve thermostability"
     """
     config = load_config(ctx.obj["config_path"])
+
+    # Override server port if specified
+    if port is not None:
+        config.downloader.server_url = f"http://localhost:{port}"
+
     pipeline = LiteraturePipeline(config)
 
     try:
