@@ -63,6 +63,9 @@ server = [
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
 ]
+vllm = [
+    "vllm>=0.4.0",
+]
 
 [project.scripts]
 autolitdb = "autolitdb.cli:main"

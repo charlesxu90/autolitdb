@@ -31,6 +31,30 @@ AutoLitDB is an automatic literature database system for querying, downloading, 
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+## Quick Start Commands
+
+```bash
+# Install
+pip install -e ".[dev]"
+
+# Install with vLLM support
+pip install -e ".[dev,vllm]"
+
+# Run complete pipeline
+autolitdb run "enzyme thermostability" \
+    "Papers about protein engineering for thermostability" \
+    --start-date 2020/01/01 \
+    --max-results 500
+
+# Individual commands
+autolitdb search "query" --output results.csv
+autolitdb filter results.csv "relevance criteria" --output filtered.csv
+autolitdb download filtered.csv
+autolitdb index --from-csv filtered.csv
+autolitdb query "your question"
+autolitdb stats
+```
+
 ## Key Files and Their Purposes
 
 | File | Purpose |
@@ -44,6 +68,71 @@ AutoLitDB is an automatic literature database system for querying, downloading, 
 | `src/autolitdb/downloader/client.py` | REST client for Lite_downloader service |
 | `src/autolitdb/rag/database.py` | ChromaDB vector database wrapper |
 | `src/autolitdb/rag/pdf_processor.py` | PDF text extraction with PyMuPDF |
+
+## Key Classes and Entry Points
+
+| Class/Function | File | Purpose |
+|----------------|------|---------|
+| `LiteraturePipeline` | pipeline.py:20 | Main orchestration class |
+| `Config` | config.py:55 | Configuration model |
+| `Article` | sources/base.py:10 | Core data model |
+| `PubMedSource` | sources/pubmed.py:17 | PubMed API client |
+| `LLMFilter` | filtering/llm_filter.py:18 | LLM-based filtering |
+| `DownloaderClient` | downloader/client.py:49 | PDF download client |
+| `LiteratureRAG` | rag/database.py:17 | ChromaDB RAG database |
+
+## Pipeline Steps (run_full_pipeline)
+
+1. **Search** - Query PubMed and fetch article metadata
+2. **Filter** - Use LLM to determine relevance (requires vLLM)
+3. **Download** - Download PDFs via Lite_downloader (optional)
+4. **Index** - Add articles to ChromaDB RAG database
+
+## External Dependencies
+
+### vLLM Server (Required for LLM filtering)
+
+- Used for running Gemma-3 locally for article filtering
+- Can also use any OpenAI-compatible API
+
+```bash
+python -m vllm.entrypoints.openai.api_server \
+    --model google/gemma-3-12b-it \
+    --port 8000 \
+    --max-model-len 8192
+```
+
+### Lite_downloader (Required for PDF downloads)
+
+- **Repository**: Maintained separately at `/home/xux/Desktop/DBAgent/Lite_downloader`
+- **Integration**: REST API client in `src/autolitdb/downloader/client.py`
+- **Server must be running**: `python cli.py start-server --port 8080`
+- **Do not modify** Lite_downloader code from this project
+
+## Configuration
+
+Default config in `config.py`. Override with YAML file:
+
+```yaml
+# config/config.yaml
+llm:
+  provider: vllm  # or openai, anthropic
+  model_name: google/gemma-3-12b-it
+  base_urls:
+    - http://localhost:8000/v1
+  max_concurrent_requests: 32
+
+downloader:
+  server_url: http://localhost:8080
+
+rag:
+  persist_directory: ./data/chroma_db
+  chunk_size: 1000
+```
+
+- Config uses Pydantic models in `src/autolitdb/config.py`
+- Environment variables can be referenced in YAML as `$VAR_NAME`
+- Example config at `config/example_config.yaml`
 
 ## Development Patterns
 
@@ -86,27 +175,6 @@ def new_command(ctx, arg, option):
     # Implementation
 ```
 
-### Configuration
-
-- Config uses Pydantic models in `src/autolitdb/config.py`
-- Environment variables can be referenced in YAML as `$VAR_NAME`
-- Example config at `config/example_config.yaml`
-
-## External Dependencies
-
-### Lite_downloader (PDF Downloads)
-
-- **Repository**: Maintained separately at `/home/xux/Desktop/DBAgent/Lite_downloader`
-- **Integration**: REST API client in `src/autolitdb/downloader/client.py`
-- **Server must be running**: `python cli.py start-server --port 8080`
-- **Do not modify** Lite_downloader code from this project
-
-### vLLM (LLM Inference)
-
-- Used for running Gemma-3 locally for article filtering
-- Start server: `python -m vllm.entrypoints.openai.api_server --model google/gemma-3-12b-it --port 8000`
-- Can also use any OpenAI-compatible API
-
 ## Code Style and Conventions
 
 - **Type hints**: Use throughout, with `from __future__ import annotations`
@@ -124,12 +192,24 @@ pytest tests/
 
 # Run with coverage
 pytest --cov=autolitdb tests/
+
+# Type checking
+mypy src/autolitdb
+
+# Linting
+ruff check src/
 ```
 
 Tests should:
 - Mock external APIs (PubMed, vLLM, Lite_downloader)
 - Test data transformations and parsing logic
 - Verify CLI commands work correctly
+
+## Common Issues
+
+1. **"Connection refused" on port 8000**: vLLM server not running
+2. **"Connection refused" on port 8080**: Lite_downloader server not running
+3. **LLM filtering returns 0 relevant**: Check system prompt and relevance criteria
 
 ## Common Tasks
 
@@ -151,6 +231,27 @@ autolitdb run "search query" "relevance criteria" --max-results 500
 ### Query RAG database
 ```bash
 autolitdb query "What methods are used for X?"
+```
+
+## Python API Example
+
+```python
+from autolitdb import LiteraturePipeline, load_config
+
+config = load_config("config/config.yaml")  # Optional
+pipeline = LiteraturePipeline(config)
+
+# Search
+articles = pipeline.search_pubmed("enzyme thermostability", max_results=100)
+
+# Filter (requires vLLM server)
+filtered = pipeline.filter_articles(articles, "Papers about protein engineering")
+relevant = pipeline.get_relevant_articles(filtered)
+
+# Query RAG
+results = pipeline.query_rag("What methods improve thermostability?")
+
+pipeline.close()
 ```
 
 ## Future Enhancements (Not Yet Implemented)
